@@ -1,0 +1,82 @@
+version: '2.1'
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.11.2
+    container_name: elasticsearch
+    environment:
+      - node.name=elasticsearch
+      - cluster.name=es-docker-cluster
+      - cluster.initial_master_nodes=elasticsearch
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - data01:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    networks:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.11.2
+    container_name: kibana
+    depends_on:
+      - elasticsearch
+    ports:
+      - 5601:5601
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+    networks:
+      - elasticsearch
+
+  db:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'db'
+      MYSQL_USER: 'user'
+      MYSQL_PASSWORD: 'password'
+      MYSQL_ROOT_PASSWORD: 'password'
+    ports:
+      - '3306:3306'
+    expose:
+      - '3306'
+    volumes:
+      - database:/usr/share/mysql
+
+  nodejs:
+    image: "node:12"
+    user: "node"
+    working_dir: /usr/share/node/data
+    depends_on:
+      - elasticsearch
+      - db
+    environment:
+      - NODE_ENV=production
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    volumes:
+      - ./node_modules:/usr/share/node/data/node_modules
+      - ./dist:/usr/share/node/data/dist
+      - ./package.json:/usr/share/node/data/package.json
+    ports:
+      - 3000:3000
+    networks:
+      - elasticsearch
+      - mysql
+    command: "npm run start"
+
+volumes:
+  data01:
+    driver: local
+  database:
+    driver: local
+
+networks:
+  elasticsearch:
+    driver: bridge
+  mysql:
+    driver: bridge
